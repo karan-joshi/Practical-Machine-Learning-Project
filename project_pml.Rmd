@@ -1,0 +1,94 @@
+---
+title: "Practical Machine Learning Project"
+author: "Karan Joshi"
+date: "January 31, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Summary
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants, to predict the manner in which they did the exercise. This is the "classe" variable in the training set. For this purpose, we clean and preprocess the data and then build two models on same data, an SVM and a random forest. After tuning these models, we find that the performance of random forest model (99.8%) is better than SVM model (98.6%) based on cross-validation, so we choose it as our final model.
+
+##Data Preprocessing
+First, we load the data to the environment and split the training data into training and testing sets for validation purposes.
+
+```{r}
+#load caret library required for splitting datasets
+library(caret)
+
+#load the datasets
+project_train <- read.csv("~/cv/ML/Data Science Course/Course PML Project/pml-training.csv")
+project_test <- read.csv("~/cv/ML/Data Science Course/Course PML Project/pml-testing.csv")
+
+#set the target column as factor data type
+project_train$classe <- as.factor(project_train$classe)
+
+#split data into training and test sets
+inTrain <- createDataPartition(y=project_train$classe, p =0.75, list=FALSE)
+training <- project_train[inTrain,]
+testing <- project_train[-inTrain,]
+
+```
+
+## Exploratory Data Analysis
+
+```{r}
+#Summary of data
+#summary(project_train)
+
+#Find columns with >50% missing data
+colnames(project_train)[colSums(is.na(project_train)) > 0.50*dim(project_train)[1]]
+
+#Remove the columns with missing data
+project_train <- project_train[c(6:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+project_test <- project_test[c(6:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+
+```
+
+## Modeling
+Now, we create different models for our data. 
+
+First we create an SVM model using the training set prepared in previous steps, and evaluate its performance using cross validation.
+```{r}
+#load the library required for SVM 
+library(e1071)
+
+#Find the optimum tuned paramteres for SVM Model
+svm_tune <- tune(svm, classe~.,data = project_train,ranges = list(epsilon = seq(0,1,0.1), cost = 2^(2:3)))
+
+#find the best tuned parameters
+summary(svm_tune)
+
+#svm 10-fold cross validation on model using tuned paramters
+tuned <- tune.svm(classe~., data = project_train, epsilon = 1, cost= 8, tunecontrol=tune.control(cross=10))
+
+summary(tuned)
+```
+
+As we can see from the cross validation result, the accuracy of the SVM model is 98.6%.
+
+Now, we create a Random Forest model using the same training dataset and evaluate its performance using cross validation.
+```{r}
+#load the library required for random forest model
+library(caret)
+
+#create train control for 10-fold cross validation
+control <- trainControl(method="cv", number=10, repeats=3, search="random")
+
+#create the random forest model using caret package's train method
+model_rf <- train(classe~., data = project_train, method = "rf", trControl = control)
+
+model_rf$finalModel
+```
+
+As we can see from the cross validation result, the accuracy of the SVM model is 99.8%. So, we choose this model as our final model.
+
+##Scoring
+Now, we use our selected model to predict outcome on test set.
+
+```{r}
+project_test$predict <- predict(model_rf, project_test)
+```
